@@ -33,7 +33,7 @@ Open a terminal `Ctrl`+`Alt`+`t` (usually) and type the followings commands: <br
 
 #### Possible problems at this step
 
-The following errors may happen for some users, but not others. *If you incur into one, please report it to us as soon as possible, so we can update this wiki with the proper error message.*
+The following errors may happen for some users
 
 * **IMPORTANT FOR ANACONDA/MINICONDA USERS:** Either of them can mess with the installation process by generating seemingly unrelated errors *(e.g. an undefined reference to libtiff)*. The easiest way is to temporarily disable them by following this procedure: [(source)](https://github.com/colmap/colmap/issues/188#issuecomment-440665679)
   - Open your .bashrc: `$ nano ~/.bashrc`
