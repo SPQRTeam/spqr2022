@@ -1,0 +1,207 @@
+#!/bin/bash
+
+set -eu
+export scriptPath=$(which "$0" | sed -e "s|^\.\./|`pwd`/../|" -e "s|^\./|`pwd`/|")
+export baseDir=$(dirname ${scriptPath})
+
+# Find out the operating system version running on this robot
+source /etc/lsb-release
+if [ "$DISTRIB_CODENAME" != "Etivaz" ]; then
+  echo -e "\033[0;31m************************************************************************************************\033[0;0m"
+  echo "B-Human can only be installed on NAO versions 4 and 5 running NaoQi OS 2.1."
+  echo "Especially not on robots running NaoQI OS 2.8."
+  echo "Do not try to remove or circumvent this check."
+  echo "We do not provide any support for porting this software to other NAO robot or NaoQI OS versions."
+  echo -e "\033[0;31m************************************************************************************************\033[0;0m"
+  exit 1
+fi
+
+if [ "$(whoami)" != "root" ]; then
+  # We are still user nao
+
+  # Create B-Human directory
+  mkdir -p /home/nao/Config
+
+  # Create logs dir for logger
+  mkdir -p /home/nao/logs
+
+  # Copy wireless profiles
+  cp -r ${baseDir}/Robot/Profiles /home/nao
+
+  # Add /home/nao to search path (.profile is needed by putty? and .bashrc for bush)
+  cp ${baseDir}/profile /home/nao/.profile
+  cp ${baseDir}/profile /home/nao/.bashrc
+
+  # Add commands to /home/nao/bin
+  cp -R ${baseDir}/bin /home/nao
+
+  # Continue as root
+  echo "Please enter password for user 'root' (usually also 'root')."
+  python -c 'import pty; pty.spawn(("/bin/su", "-c", "${scriptPath}"))'
+else
+  # Now we are root
+
+  # if install is executed on a installed robot, / is read-only, therefore remount it,
+  # otherwise this line will have no effect
+  mount -n -o remount,rw /
+
+  # Change name
+  cp ${baseDir}/Robot/hostname /etc/hostname
+  python bin/setRobotName.py $(cat /etc/hostname) | grep -v '[I]'
+
+  #TODO CONTROLLARE SE LI COPIA SUL NAO....SE LI COPIA NON CAPISCO PERCHÈ DOBBIAMO AGGIUNGERE QUELLA RIGA A SUDOERS
+  # Make sudo work
+  cp -f ${baseDir}/sudoers /etc
+  chmod 440 /etc/sudoers
+  chown root:root /etc/sudoers
+  mkdir -p /var/db
+  #TODO
+  echo "nao ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+  # Copy wireless-tools
+  cp ${baseDir}/wireless-tools/* /usr/bin/
+
+  # Install newer libstdc++
+  cp ${baseDir}/libstdc++.so.6.0.21 /usr/lib
+  chmod 777 /usr/lib/libstdc++.so.6.0.21
+  ln -sf /usr/lib/libstdc++.so.6.0.21 /usr/lib/libstdc++.so.6
+  ln -sf /usr/lib/libstdc++.so.6.0.21 /usr/lib/libstdc++.so
+
+  # Speed up boot process
+  if [ -f /usr/libexec/hal-prestarter ] ; then
+    mv -n /usr/libexec/hal-prestarter /usr/libexec/hal-prestarter.org
+  fi
+  echo "#!/bin/sh" > /usr/libexec/hal-prestarter
+  chmod +x /usr/libexec/hal-prestarter
+  echo "copia servizi rete ****"
+  # wpa_supplicant
+  #TODO prendere i servizi e copiarli nel NAO
+
+  cp ${baseDir}/Robot/Profiles/wpa_supplicant.service /etc/systemd/system/
+  cp ${baseDir}/Robot/Profiles/setvolume.service /etc/systemd/user/
+
+  cp ${baseDir}/Robot/wired.service /etc/systemd/user/
+  #original path dei buman /etc/init.d
+  cp ${baseDir}/Robot/wireless.service  /etc/systemd/user/
+
+  # systemctl --user enable wired.service
+  # systemctl --user enable wireless.service
+  # systemctl --user daemon-reload
+
+  # Start bhuman during boot
+  #TODO check service e destinazione. Originale /etc/init.d/bhumand
+  cp ${baseDir}/init-bhumand.service /etc/systemd/user/bhumand.service
+  #TODO secondo me non serve metterci il file sh... mettendo il servizio che fa la stessa cosa siamo ok no?
+  #cp ${baseDir}/init-bhumand /etc/init.d/bhumand
+  #rc-update add bhumand
+  # systemctl --user enable bhumand.service
+
+
+  # Create mountpoint for USB-Stick
+  echo "Create mountpoint for USB-Stick ****"
+
+  mkdir -p /media/usb
+
+  # Add auto mount for USB-Stick
+  if ! cat /etc/fstab | grep -q '/media/usb'; then
+    echo "#USB-Stick" >> /etc/fstab
+    echo "/dev/sdb1                /media/usb               vfat         noauto,users,defaults,dmask=000,fmask=111 0    0" >> /etc/fstab
+  fi
+
+  # Mount / readonly during boot
+  #TODO check se va bene
+  cp ${baseDir}/readonly.service /etc/systemd/user/
+  #TODO secondo me non serve metterci il file sh... mettendo il servizio che fa la stessa cosa siamo ok no?
+  #cp ${baseDir}/readonly /etc/init.d/
+  #rc-update add readonly boot
+  # systemctl --user enable readonly.service
+  # systemctl --user daemon-reload
+
+  # Marker: 8b513957aa1ac143466f5697b3af5543
+  # Do not remove the markers, since they are used by the b-bundle script to locate the
+  # function which replaces the password for user nao.
+
+  # echo "Marker strano shadow ****"
+  # cp -n /etc/shadow /etc/shadow.org
+  # sed </etc/shadow.org "s%^nao:.*%nao:\$6\$yoHR/vLF\$I8DTr3sRt1XIDbB0LdWgfuBl57jQk3K7CUtnhMqS7OJ3C.NHybfH48OAqTgvEf57dMUhHOhO6cKnbnoAGSDtM.:15283:0:99999:7:::%" >/etc/shadow
+  # # Marker: 8b513957aa1ac143466f5697b3af5543
+
+  echo "Do not verify remote hostname via DNS ****"
+  # Do not verify remote hostname via DNS
+  if [ ! -f "/etc/ssh/sshd_config" -o -z "$(grep "UseDNS no" "/etc/ssh/sshd_config" 2>/dev/null)" ]; then
+    echo "UseDNS no" >> "/etc/ssh/sshd_config"
+  fi
+
+  # Set the timezone and localtime
+  cp /usr/share/zoneinfo/Europe/Paris /etc/localtime
+  echo "Europe/Paris" > /etc/timezone
+
+  # Save original naoqi autoload file (but do not overwrite if backup already exists) and install B-Human's
+  echo "Save original naoqi autoload file ****" #mandRaCATA PATH
+  if [ ! -f /opt/aldebaran/etc/naoqi/autoload.org ] ; then
+    cp -n /opt/aldebaran/etc/naoqi/autoload.ini /opt/aldebaran/etc/naoqi/autoload.org
+  fi
+  cp ${baseDir}/autoload.ini /opt/aldebaran/etc/naoqi/autoload.bh
+  /home/nao/bin/tobhuman
+
+  # Save original checkpart script (but do not overwrite if backup already exists) and install B-Human's
+  echo "Save original checkpart script ****"
+  # if [ ! -f /etc/init.d/checkpart.org ] ; then
+  #   cp -n /etc/init.d/checkpart /etc/init.d/checkpart.org
+  # fi
+  cp ${baseDir}/checkpart /etc/init.d/checkpart
+
+  # Load sshd later
+  #rc-update add sshd
+  #TODO sistemare trovare il servizio sshd nel nao
+
+
+
+  #TODO ANDRAà BENE SOLO QUI?????
+  # loginctl enable-linger nao
+  # Install alternative modules
+  echo "kernel ****"
+  cp -r ${baseDir}/kernel/2.6.33.9-rt31-aldebaran-rt /lib/modules
+
+
+# #TODO systemctl disable
+#   # Remove all services not needed
+#   # rc-update >${baseDir}/temp
+#  for i in crash-report-uploader connman proxydaemon vsftpd nginx naopathe laser bootprogress_0 bootprogress_25 bootprogress_50 bootprogress_75 bootprogress_100 avahi-daemon lircd bluetooth sshd hwclock sysctl local urandom termencoding root netmount mtab sysklogd hostname modules savecache firewall_mode ofono pulseaudio qimessaging-json udev-postmount
+#  do
+#   #  # if [ ! -z "$(grep "$i |" ${baseDir}/temp)" ]; then
+#       systemctl disable $i #(echo "$(grep "$i |" ${baseDir}/temp)" | sed "s%[ ]*\([^ ]*\) |[ ]*\([^ ]*\).*%\1 \2%")
+#   #  # fi
+#   done
+#
+#   systemctl disable /lib/systemd/system/connman.service
+#   systemctl disable /lib/systemd/system/nginx.service
+#   systemctl disable /lib/systemd/system/avahi-daemon.service
+#   systemctl disable /lib/systemd/system/bluetooth.service
+#   systemctl disable /etc/systemd/system/hwclock.service
+#   systemctl disable /lib/systemd/system/systemd-sysctl.service
+#   systemctl disable /etc/systemd/system/sysklogd.service
+#   systemctl disable /etc/systemd/system/hostname.service
+#   systemctl disable /lib/systemd/system/ofono.service
+#   systemctl disable /nao/etc/systemd/user/crash-report-uploader.service
+#   systemctl disable /nao/etc/systemd/user/pulseaudio.service
+#   systemctl disable /nao/etc/systemd/user/qimessaging-json.service
+
+  #su -c "systemctl daemon-reload" nao
+
+  echo "Root done ****"
+  #su -c "systemctl --user disable boot_progress_before_naoqi.service" nao
+  su -c "touch /home/nao/robocup.conf" nao
+  su -c "systemctl --user enable setvolume.service" nao
+  su -c "systemctl --user enable wired.service" nao
+  su -c "systemctl --user enable wireless.service" nao
+  su -c "systemctl --user enable  bhumand.service" nao
+  su -c "systemctl --user enable readonly.service" nao
+  #su -c "sudo systemctl enable sshd@.service" nao
+  # systemctl enable sshd@.service
+  su -c "systemctl --user daemon-reload" nao
+  echo "user done ****"
+  echo "[INFO] rebooting"
+  sync
+  reboot && exit 1
+fi

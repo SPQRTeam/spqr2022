@@ -1,0 +1,12 @@
+[Unit]
+Description=WPA supplicant
+
+[Service]
+Type=dbus
+BusName=fi.w1.wpa_supplicant1
+ExecStart=/usr/sbin/wpa_supplicant 
+
+[Install]
+WantedBy=multi-user.target
+Alias=fi.w1.wpa_supplicant1.service
+

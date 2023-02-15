@@ -1,0 +1,17 @@
+#!/bin/sh
+
+description="mount / read-only by using umount /"
+
+start()
+{
+  ebegin "unmount / for read-only filesystem"
+  umount /
+  eend $?
+}
+
+case $1 in
+  start)
+    start
+    ;;
+  *)
+esac

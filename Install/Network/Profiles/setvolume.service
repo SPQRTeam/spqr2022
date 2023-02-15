@@ -1,0 +1,12 @@
+[Unit]
+Description=SetVolume at boot
+Before=init-bhumand.service
+
+[Service]
+Type=simple
+RemainAfterExit=no
+ExecStartPre=/bin/bash -c 'amixer -c 0 -- sset \"Analog Front\" playback 50% unmute &> /dev/null'
+ExecStart=/bin/bash -c 'amixer -c 0 -- sset \"Analog Rear\" playback 50% unmute &> /dev/null'
+
+[Install]
+WantedBy=default.target

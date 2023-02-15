@@ -1,0 +1,17 @@
+[Unit]
+Description=B-Human WLAN network configuration
+After=dbus.service
+Before=network.target
+Wants=network.target
+Conflicts=wpa_supplicant.service
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+ExecStartPre=/bin/bash -c 'sudo ifconfig wlan0 up'
+ExecStart=/bin/bash -c 'sudo wpa_supplicant -iwlan0 -Dnl80211 -c/home/nao/Profiles/default -B && sudo sleep 1'
+ExecStartPost=/bin/bash -c 'sudo ifconfig wlan0 10.0.19.19 netmask 255.255.0.0'
+ExecStop=/bin/bash -c 'sudo ifconfig wlan0 down'
+
+[Install]
+WantedBy=default.target

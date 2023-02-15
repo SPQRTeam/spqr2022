@@ -1,0 +1,13 @@
+[Unit]
+Description=SPQR init-bhumand.service
+After=naoqi.service
+After=sshd.service
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+ExecStart=/bin/bash -c '/home/nao/bin/bhumand restart'
+ExecStop=/bin/bash -c '/home/nao/bin/bhumand stop'
+
+[Install]
+WantedBy=default.target

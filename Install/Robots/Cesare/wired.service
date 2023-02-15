@@ -1,0 +1,16 @@
+[Unit]
+Description=B-Human LAN network configuration
+After=dbus.service
+Before=network.target
+Wants=network.target
+Conflicts=connman.service
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+ExecStart=/bin/bash -c 'sudo ifconfig eth0 192.168.19.18 netmask 255.255.0.0'
+ExecStartPost=/bin/bash -c 'sudo ifconfig eth0 up'
+ExecStop=/bin/bash -c 'sudo ifconfig eth0 down'
+
+[Install]
+WantedBy=default.target
